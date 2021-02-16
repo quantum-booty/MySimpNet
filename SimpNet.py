@@ -1,24 +1,22 @@
-from keras.datasets import mnist
-from keras.utils import to_categorical, plot_model
 from keras.models import Sequential, load_model
 from keras.layers import Conv2D, MaxPool2D, GlobalMaxPooling2D, Dense, Flatten, Dropout, BatchNormalization
 import keras
-import keras.activations as activations
 import keras.layers as layers
 
-# from cnn_configs import Slim, Full
+from cnn_configs import Slim, Full
 
 # %load_ext tensorboard
 import tensorflow as tf
 
 from kerastuner import HyperModel, HyperParameters
 from kerastuner.tuners import Hyperband
-
-
 import datetime
-
 import numpy as np
-import matplotlib.pyplot as plt
+
+from preprocessing import get_dataflow, preprocess
+
+
+# import matplotlib.pyplot as plt
 
 
 class SimpNet(HyperModel):
@@ -170,33 +168,10 @@ def error_rate(model_path, x_test, labels_test):
     print('pct misclassified = ', 100 * misclassified / labels_test.size)
 
 
-def preprocess():
-    (x_train, labels_train), (x_test, labels_test) = mnist.load_data()
-
-    # convert to float type
-    x_train = x_train.astype('float32')
-    x_test = x_test.astype('float32')
-    x_train /= 255
-    x_test /= 255
-
-    # one hot encoding
-    y_train = to_categorical(labels_train, 10)
-    y_test = to_categorical(labels_test, 10)
-
-    n_pixels = x_train.shape[1]
-
-    # plt.figure()
-    # plt.imshow(x_train[0])
-    # plt.show()
-
-    x_train = x_train.reshape(x_train.shape[0], n_pixels, n_pixels, 1)
-    x_test = x_test.reshape(x_test.shape[0], n_pixels, n_pixels, 1)
-
-    return x_train, x_test, labels_train, y_train, y_test, labels_test
-
-
 if __name__ == "__main__":
     x_train, x_test, labels_train, y_train, y_test, labels_test = preprocess()
+    # data augmentation
+    dataflow = get_dataflow(x_train, y_train, batch_size=100)
 
     simpnet = SimpNet(config=Slim())
     # simpnet = SimpNet(config=Full())
@@ -212,10 +187,8 @@ if __name__ == "__main__":
         )
 
         tuner.search(
-            x_train,
-            y_train,
+            dataflow,
             epochs=20,
-            batch_size=100,
             validation_data=(x_test, y_test),
             callbacks=SimpNet.get_callbacks(),
         )
@@ -226,8 +199,7 @@ if __name__ == "__main__":
         model = tuner.hypermodel.build(best_hps)
 
         history = model.fit(
-            x_train,
-            y_train,
+            dataflow,
             epochs=50,
             validation_data=(x_test, y_test),
             callbacks=SimpNet.get_callbacks(),
@@ -236,7 +208,7 @@ if __name__ == "__main__":
 
     elif mode == 'test':
         hp = HyperParameters()
-        # best 1
+        # best 1 0.34% misclassification
         # hp.Fixed('weight_init', value='GlorotUniform')
         # hp.Fixed('base_lr', value=0.21145)
         # hp.Fixed('decay_steps', value=7185)
@@ -250,7 +222,7 @@ if __name__ == "__main__":
         # hp.Fixed('decay_rate', value=0.44912)
         # hp.Fixed('lr_momentum', value=0.93493)
 
-        # manual tune
+        # manual tune 0.30% 0.32% misclassification
         hp.Fixed('weight_init', value='GlorotUniform')
         hp.Fixed('base_lr', value=0.1)
         # hp.Fixed('decay_steps', value=2500)
@@ -267,34 +239,32 @@ if __name__ == "__main__":
         model = simpnet.build(hp)
 
         history = model.fit(
-            x_train,
-            y_train,
+            dataflow,
             epochs=50,
-            batch_size=100,
             validation_data=(x_test, y_test),
             callbacks=SimpNet.get_callbacks(),
             verbose=2,
         )
-    elif mode == 'final':
-        x = np.concatenate((x_train, x_test))
-        y = np.concatenate((y_train, y_test))
+    # elif mode == 'final':
+    #     x = np.concatenate((x_train, x_test))
+    #     y = np.concatenate((y_train, y_test))
 
-        hp = HyperParameters()
-        hp.Fixed('weight_init', value='GlorotUniform')
-        hp.Fixed('base_lr', value=0.21145)
-        hp.Fixed('decay_steps', value=7185)
-        hp.Fixed('decay_rate', value=0.115)
-        hp.Fixed('lr_momentum', value=0.91074)
-        model = simpnet.build(hp)
+    #     hp = HyperParameters()
+    #     hp.Fixed('weight_init', value='GlorotUniform')
+    #     hp.Fixed('base_lr', value=0.21145)
+    #     hp.Fixed('decay_steps', value=7185)
+    #     hp.Fixed('decay_rate', value=0.115)
+    #     hp.Fixed('lr_momentum', value=0.91074)
+    #     model = simpnet.build(hp)
 
-        history = model.fit(
-            x,
-            y,
-            epochs=50,
-            batch_size=100,
-            callbacks=SimpNet.get_callbacks(),
-            verbose=2,
-        )
+    #     history = model.fit(
+    #         x,
+    #         y,
+    #         epochs=50,
+    #         batch_size=100,
+    #         callbacks=SimpNet.get_callbacks(),
+    #         verbose=2,
+    #     )
     else:
         raise Exception('unrecognised training mode!')
 
