@@ -1,3 +1,8 @@
+import os
+
+if os.getcwd() == '/content':
+    os.chdir('/content/MySimpNet')
+
 from keras.models import Sequential, load_model
 from keras.layers import Conv2D, MaxPool2D, GlobalMaxPooling2D, Dense, Flatten, Dropout, BatchNormalization
 import keras
@@ -32,33 +37,42 @@ class SimpNet(HyperModel):
     def inference(self, hp):
         wi = hp.Choice('weight_init', values=['HeUniform', 'HeNormal', 'GlorotUniform', 'GlorotNormal'])
         c = self.config
-        if c.dropout:
-            dr = hp.Float('dropout_rate', 0.65, 0.95)
+        dr = hp.Fixed('dropout_rate', value=0.8)
+        if c.full:
+            bn_mo = hp.Fixed('bn_momentum', value=0.95)
         else:
-            dr = hp.Fixed('dropout_rate', 0.8)
+            bn_mo = hp.Fixed('bn_momentum', value=0.99)
 
-        f0 = hp.Choice('filters0', values=[24, 28, 30, 34, 36], default=30)
-        f1 = hp.Choice('filters1', values=[36, 38, 40, 42, 44], default=40)
-        f2 = hp.Choice('filters2', values=[46, 48, 50, 52, 54], default=50)
-        f3 = hp.Choice('filters3', values=[54, 56, 58, 60, 62], default=58)
-        f4 = hp.Choice('filters4', values=[66, 68, 70, 72, 74], default=70)
-        f5 = hp.Choice('filters5', values=[86, 88, 90, 82, 94], default=90)
+        # f0 = hp.Choice('filters0', values=[24, 28, 30, 34, 36], default=30)
+        # f1 = hp.Choice('filters1', values=[36, 38, 40, 42, 44], default=40)
+        # f2 = hp.Choice('filters2', values=[46, 48, 50, 52, 54], default=50)
+        # f3 = hp.Choice('filters3', values=[54, 56, 58, 60, 62], default=58)
+        # f4 = hp.Choice('filters4', values=[66, 68, 70, 72, 74], default=70)
+        # f5 = hp.Choice('filters5', values=[86, 88, 90, 82, 94], default=90)
+        f0 = hp.Fixed('filters0', value=66)
+        f1 = hp.Fixed('filters1', value=64)
+        f2 = hp.Fixed('filters2', value=96)
+        f3 = hp.Fixed('filters3', value=144)
+        f4 = hp.Fixed('filters4', value=178)
+        f5 = hp.Fixed('filters5', value=216)
 
-        self.conv_relu_bn_dropout(filters=f0, input_shape=c.INPUT_SHAPE, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f1, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f1, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f1, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
+        self.conv_relu_bn_dropout(
+            filters=f0, input_shape=c.INPUT_SHAPE, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo
+        )
+        self.conv_relu_bn_dropout(filters=f1, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f1, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f1, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
         self.saf_pool()
-        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f3, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
+        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f2, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f3, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
         self.saf_pool()
-        self.conv_relu_bn_dropout(filters=f3, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f4, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
-        self.conv_relu_bn_dropout(filters=f5, dropout_rate=dr, dropout=c.dropout, weight_init=wi)
+        self.conv_relu_bn_dropout(filters=f3, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f4, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
+        self.conv_relu_bn_dropout(filters=f5, dropout_rate=dr, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo)
         self.net.add(GlobalMaxPooling2D())
         if c.dropout:
             self.net.add(Dropout(rate=dr))
@@ -68,17 +82,17 @@ class SimpNet(HyperModel):
     def optimizer_net_compile(self, hp):
         c = self.config
 
-        base_lr = hp.Float('base_lr', 0.1, 0.5, sampling='log', default=0.2)
-        decay_steps = hp.Int('decay_steps', 2500, 10000, sampling='linear', default=7185)
-        decay_rate = hp.Float('decay_rate', 0.1, 0.95, sampling='linear', default=0.1)
+        #         base_lr = hp.Float('base_lr', 0.1, 0.5, sampling='log', default=0.2)
+        #         decay_steps = hp.Int('decay_steps', 2500, 10000, sampling='linear', default=7185)
+        #         decay_rate = hp.Float('decay_rate', 0.1, 0.95, sampling='linear', default=0.1)
         lr_momentum = hp.Float('lr_momentum', 0.9, 0.99, sampling='log', default=0.95)
 
-        # lr_schedule = keras.optimizers.schedules.ExponentialDecay(
-        #     base_lr,
-        #     decay_steps,
-        #     decay_rate,
-        #     staircase=True,
-        # )
+        #         lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+        #             base_lr,
+        #             decay_steps,
+        #             decay_rate,
+        #             staircase=True,
+        #         )
 
         # default 0.30% misclassified
         boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
@@ -171,19 +185,29 @@ def error_rate(model_path, x_test, labels_test):
 if __name__ == "__main__":
     x_train, x_test, labels_train, y_train, y_test, labels_test = preprocess()
     # data augmentation
-    dataflow = get_dataflow(x_train, y_train, batch_size=100)
 
-    simpnet = SimpNet(config=Slim())
-    # simpnet = SimpNet(config=Full())
+    dataflow = get_dataflow(
+        x_train,
+        y_train,
+        batch_size=100,
+        rotation_range=30,
+        width_shift_range=0.1,
+        height_shift_range=0.1,
+        shear_range=30,
+        use_eraser=False,
+    )
 
-    mode = 'test'
+    # simpnet = SimpNet(config=Slim())
+    simpnet = SimpNet(config=Full())
+
+    mode = 'tune'
 
     if mode == 'tune':
         tuner = Hyperband(
             simpnet,
             objective='val_accuracy',
             max_epochs=15,
-            hyperband_iterations=3,
+            hyperband_iterations=1,
         )
 
         tuner.search(

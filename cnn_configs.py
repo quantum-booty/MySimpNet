@@ -3,6 +3,7 @@ from typing import NamedTuple
 
 class Slim(NamedTuple):
     # 300k parameters
+    full: bool = False
     dropout: bool = False
 
     EPSILON: float = 1e-6
@@ -58,6 +59,7 @@ class Slim(NamedTuple):
 
 class Full(NamedTuple):
     # 5 million parameters
+    full: bool = True
     dropout: bool = True
 
     EPSILON: float = 1e-6

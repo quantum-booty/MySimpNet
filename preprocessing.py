@@ -81,20 +81,32 @@ def plot(x_train):
     plt.show()
 
 
-def get_dataflow(x_train, y_train, batch_size):
-    eraser = get_random_eraser(
-        p=0.5,
-        s_l=0.10,
-        s_h=0.10,
-        v_l=0,
-        v_h=0,
-        pixel_level=True,
-    )
+def get_dataflow(
+    x_train,
+    y_train,
+    batch_size,
+    rotation_range=30,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    shear_range=30,
+    use_eraser=False,
+):
+    if use_eraser:
+        eraser = get_random_eraser(
+            p=0.5,
+            s_l=0.10,
+            s_h=0.10,
+            v_l=0,
+            v_h=0,
+            pixel_level=True,
+        )
+    else:
+        eraser = None
     datagen = ImageDataGenerator(
-        rotation_range=30,
-        width_shift_range=0.1,
-        height_shift_range=0.1,
-        shear_range=30,
+        rotation_range=rotation_range,
+        width_shift_range=width_shift_range,
+        height_shift_range=height_shift_range,
+        shear_range=shear_range,
         preprocessing_function=eraser,
     )
     datagen.fit(x_train)
