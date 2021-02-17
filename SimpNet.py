@@ -190,17 +190,17 @@ if __name__ == "__main__":
         x_train,
         y_train,
         batch_size=100,
-        rotation_range=30,
-        width_shift_range=0.1,
-        height_shift_range=0.1,
-        shear_range=30,
+        rotation_range=0,
+        width_shift_range=0,
+        height_shift_range=0,
+        shear_range=0,
         use_eraser=False,
     )
 
     # simpnet = SimpNet(config=Slim())
     simpnet = SimpNet(config=Full())
 
-    mode = 'tune'
+    mode = 'test'
 
     if mode == 'tune':
         tuner = Hyperband(
