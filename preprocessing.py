@@ -1,3 +1,5 @@
+import tensorflow.compat.v2 as tf
+import tensorflow_datasets as tfds
 from keras.datasets import mnist
 from keras.utils import to_categorical
 import matplotlib.pyplot as plt
@@ -20,6 +22,8 @@ def get_random_eraser(p=0.5, s_l=0.02, s_h=0.4, r_1=0.3, r_2=1 / 0.3, v_l=0, v_h
             img_h, img_w, img_c = input_img.shape
         elif input_img.ndim == 2:
             img_h, img_w = input_img.shape
+        else:
+            raise RuntimeError('invalid image dimensions')
 
         p_1 = np.random.rand()
 
@@ -52,25 +56,69 @@ def get_random_eraser(p=0.5, s_l=0.02, s_h=0.4, r_1=0.3, r_2=1 / 0.3, v_l=0, v_h
     return eraser
 
 
-def preprocess():
-    (x_train, labels_train), (x_test, labels_test) = mnist.load_data()
+class GetData:
+    def __init__(self):
+        self.data_import()
+        self.preprocess()
 
-    # one hot encoding
-    y_train = to_categorical(labels_train, 10)
-    y_test = to_categorical(labels_test, 10)
+    def get_all(self):
+        return (
+            self.x_train,
+            self.y_train,
+            self.labels_train,
+            self.x_test,
+            self.y_test,
+            self.labels_test,
+        )
 
-    # convert to float type
-    x_train = x_train.astype('float32')
-    x_test = x_test.astype('float32')
-    x_train /= 255
-    x_test /= 255
+    def data_import(self):
+        # import from mnist and emnist and concatenate the two datasets
+        (x_train, labels_train), (x_test, labels_test) = mnist.load_data()
 
-    n_pixels = x_train.shape[1]
+        def transpose(ds):
+            return ds.map(lambda x: {'image': tf.transpose(x['image'], perm=[1, 0, 2]), 'label': x['label']})
 
-    x_train = x_train.reshape(x_train.shape[0], n_pixels, n_pixels, 1)
-    x_test = x_test.reshape(x_test.shape[0], n_pixels, n_pixels, 1)
+        # Construct a tf.data.Dataset
+        e_train, e_test = tfds.load('emnist/digits', split=['train', 'test'], shuffle_files=True)
+        e_train, e_test = transpose(e_train), transpose(e_test)
+        ori_train, ori_test = tfds.load('emnist/emnist', split=['train', 'test'], shuffle_files=True)
+        ori_train, ori_test = transpose(ori_train), transpose(ori_test)
 
-    return x_train, x_test, labels_train, y_train, y_test, labels_test
+        ds_train = e_train.concatenate(ori_train)
+        ds_test = e_test.concatenate(ori_test)
+
+        x_train = []
+        labels_train = []
+        for x, y in ds_train.as_numpy_iterator():
+            x_train.append(x)
+            labels_train.append(y)
+
+        x_test = []
+        labels_test = []
+        for x, y in ds_test.as_numpy_iterator():
+            x_test.append(x)
+            labels_test.append(y)
+
+        self.x_train = np.array(x_train)
+        self.x_test = np.array(x_test)
+        self.labels_train = np.array(labels_train)
+        self.labels_test = np.array(labels_test)
+
+    def preprocess(self):
+        # one hot encoding
+        self.y_train = to_categorical(self.labels_train, 10)
+        self.y_test = to_categorical(self.labels_test, 10)
+
+        # convert to float type
+        x_train = self.x_train.astype('float32')
+        x_test = self.x_test.astype('float32')
+        x_train /= 255
+        x_test /= 255
+
+        n_pixels = x_train.shape[1]
+
+        self.x_train = x_train.reshape(x_train.shape[0], n_pixels, n_pixels, 1)
+        self.x_test = x_test.reshape(x_test.shape[0], n_pixels, n_pixels, 1)
 
 
 def plot(x_train):
@@ -90,15 +138,21 @@ def get_dataflow(
     height_shift_range=0.1,
     shear_range=30,
     use_eraser=False,
+    p=0.5,
+    s_l=0.10,
+    s_h=0.10,
+    v_l=0,
+    v_h=0,
+    pixel_level=True,
 ):
     if use_eraser:
         eraser = get_random_eraser(
-            p=0.5,
-            s_l=0.10,
-            s_h=0.10,
-            v_l=0,
-            v_h=0,
-            pixel_level=True,
+            p=p,
+            s_l=s_l,
+            s_h=s_h,
+            v_l=v_l,
+            v_h=v_h,
+            pixel_level=pixel_level,
         )
     else:
         eraser = None
@@ -114,25 +168,25 @@ def get_dataflow(
 
 
 if __name__ == "__main__":
-    x_train, x_test, labels_train, y_train, y_test, labels_test = preprocess()
+    # x_train, x_test, labels_train, y_train, y_test, labels_test = preprocess()
 
-    eraser = get_random_eraser(
-        p=0.5,
-        s_l=0.10,
-        s_h=0.10,
-        v_l=0,
-        v_h=0,
-        pixel_level=True,
-    )
-    datagen = ImageDataGenerator(
-        rotation_range=30,
-        width_shift_range=0.1,
-        height_shift_range=0.1,
-        shear_range=30,
-        preprocessing_function=eraser,
-    )
-    datagen.fit(x_train)
+    # eraser = get_random_eraser(
+    #     p=0.5,
+    #     s_l=0.10,
+    #     s_h=0.10,
+    #     v_l=0,
+    #     v_h=0,
+    #     pixel_level=True,
+    # )
+    # datagen = ImageDataGenerator(
+    #     rotation_range=30,
+    #     width_shift_range=0.1,
+    #     height_shift_range=0.1,
+    #     shear_range=30,
+    #     preprocessing_function=eraser,
+    # )
+    # datagen.fit(x_train)
 
-    for x_batch, y_batch in get_dataflow(x_train, y_train, batch_size=9):
-        plot(x_batch)
-        break
+    # for x_batch, y_batch in get_dataflow(x_train, y_train, batch_size=9):
+    #     plot(x_batch)
+    pass

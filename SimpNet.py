@@ -18,7 +18,7 @@ from kerastuner.tuners import Hyperband
 import datetime
 import numpy as np
 
-from preprocessing import get_dataflow, preprocess
+from preprocessing import GetData, get_dataflow
 
 
 # import matplotlib.pyplot as plt
@@ -37,7 +37,7 @@ class SimpNet(HyperModel):
     def inference(self, hp):
         wi = hp.Choice('weight_init', values=['HeUniform', 'HeNormal', 'GlorotUniform', 'GlorotNormal'])
         c = self.config
-        dr = hp.Fixed('dropout_rate', value=0.8)
+        dr = hp.Fixed('dropout_rate', value=0.2)
         if c.full:
             bn_mo = hp.Fixed('bn_momentum', value=0.95)
         else:
@@ -49,12 +49,20 @@ class SimpNet(HyperModel):
         # f3 = hp.Choice('filters3', values=[54, 56, 58, 60, 62], default=58)
         # f4 = hp.Choice('filters4', values=[66, 68, 70, 72, 74], default=70)
         # f5 = hp.Choice('filters5', values=[86, 88, 90, 82, 94], default=90)
-        f0 = hp.Fixed('filters0', value=66)
-        f1 = hp.Fixed('filters1', value=64)
-        f2 = hp.Fixed('filters2', value=96)
-        f3 = hp.Fixed('filters3', value=144)
-        f4 = hp.Fixed('filters4', value=178)
-        f5 = hp.Fixed('filters5', value=216)
+
+        f0 = hp.Fixed('filters0', value=30)
+        f1 = hp.Fixed('filters1', value=40)
+        f2 = hp.Fixed('filters2', value=50)
+        f3 = hp.Fixed('filters3', value=58)
+        f4 = hp.Fixed('filters4', value=70)
+        f5 = hp.Fixed('filters5', value=90)
+
+        #         f0 = hp.Fixed('filters0', value=66)
+        #         f1 = hp.Fixed('filters1', value=64)
+        #         f2 = hp.Fixed('filters2', value=96)
+        #         f3 = hp.Fixed('filters3', value=144)
+        #         f4 = hp.Fixed('filters4', value=178)
+        #         f5 = hp.Fixed('filters5', value=216)
 
         self.conv_relu_bn_dropout(
             filters=f0, input_shape=c.INPUT_SHAPE, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo
@@ -96,13 +104,14 @@ class SimpNet(HyperModel):
 
         # default 0.30% misclassified
         boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
-        values = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]
+        values = [5e-1, 7e-2, 7e-3, 5e-4, 5e-5, 5e-6, 5e-7]
 
         lr_schedule = keras.optimizers.schedules.PiecewiseConstantDecay(
             boundaries,
             values,
         )
         opt = keras.optimizers.Adadelta(learning_rate=lr_schedule, rho=lr_momentum, epsilon=c.EPSILON)
+        # opt = keras.optimizers.SGD(learning_rate=lr_schedule, momentum=lr_momentum)
         # opt = keras.optimizers.Adadelta()
 
         self.net.compile(optimizer=opt, loss='categorical_crossentropy', metrics='accuracy')
@@ -183,22 +192,28 @@ def error_rate(model_path, x_test, labels_test):
 
 
 if __name__ == "__main__":
-    x_train, x_test, labels_train, y_train, y_test, labels_test = preprocess()
-    # data augmentation
+    x_train, x_test, labels_train, y_train, y_test, labels_test = GetData().get_all()
 
+    # data augmentation
     dataflow = get_dataflow(
         x_train,
         y_train,
         batch_size=100,
-        rotation_range=0,
-        width_shift_range=0,
-        height_shift_range=0,
-        shear_range=0,
+        rotation_range=20,
+        width_shift_range=0.0,
+        height_shift_range=0.0,
+        shear_range=10,
         use_eraser=False,
+        p=0.5,
+        s_l=0.10,
+        s_h=0.10,
+        v_l=0,
+        v_h=0,
+        pixel_level=True,
     )
 
-    # simpnet = SimpNet(config=Slim())
-    simpnet = SimpNet(config=Full())
+    simpnet = SimpNet(config=Slim())
+    # simpnet = SimpNet(config=Full())
 
     mode = 'test'
 
