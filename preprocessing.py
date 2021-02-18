@@ -79,9 +79,11 @@ class GetData:
             return ds.map(lambda x: {'image': tf.transpose(x['image'], perm=[1, 0, 2]), 'label': x['label']})
 
         # Construct a tf.data.Dataset
-        e_train, e_test = tfds.load('emnist/digits', split=['train', 'test'], shuffle_files=True)
+        # e_train, e_test = tfds.load('emnist/digits', split=['train', 'test'], shuffle_files=True)
+        # ori_train, ori_test = tfds.load('emnist/mnist', split=['train', 'test'], shuffle_files=True)
+        e_train, e_test = tfds.load('emnist/digits', split=['train[:10]', 'test[:10]'], shuffle_files=True)
+        ori_train, ori_test = tfds.load('emnist/mnist', split=['train[:10]', 'test[:10]'], shuffle_files=True)
         e_train, e_test = transpose(e_train), transpose(e_test)
-        ori_train, ori_test = tfds.load('emnist/emnist', split=['train', 'test'], shuffle_files=True)
         ori_train, ori_test = transpose(ori_train), transpose(ori_test)
 
         ds_train = e_train.concatenate(ori_train)
@@ -89,15 +91,15 @@ class GetData:
 
         x_train = []
         labels_train = []
-        for x, y in ds_train.as_numpy_iterator():
-            x_train.append(x)
-            labels_train.append(y)
+        for _, xy_dict in ds_train.enumerate():
+            x_train.append(xy_dict['image'])
+            labels_train.append(xy_dict['label'])
 
         x_test = []
         labels_test = []
-        for x, y in ds_test.as_numpy_iterator():
-            x_test.append(x)
-            labels_test.append(y)
+        for _, xy_dict in ds_test.enumerate():
+            x_test.append(xy_dict['image'])
+            labels_test.append(xy_dict['label'])
 
         self.x_train = np.array(x_train)
         self.x_test = np.array(x_test)

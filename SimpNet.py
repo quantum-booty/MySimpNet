@@ -192,7 +192,7 @@ def error_rate(model_path, x_test, labels_test):
 
 
 if __name__ == "__main__":
-    x_train, x_test, labels_train, y_train, y_test, labels_test = GetData().get_all()
+    x_train, y_train, labels_train, x_test, y_test, labels_test = GetData().get_all()
 
     # data augmentation
     dataflow = get_dataflow(
