@@ -35,14 +35,8 @@ class SimpNet(HyperModel):
         return self.net
 
     def inference(self, hp):
-        """
-        weight_init
-        dropout_rate
-        bn_momentum
-        lr_momentum
-        """
-        c = self.config
         wi = hp.Choice('weight_init', values=['HeUniform', 'HeNormal', 'GlorotUniform', 'GlorotNormal'])
+        c = self.config
         dr = hp.Fixed('dropout_rate', value=0.2)
         if c.full:
             bn_mo = hp.Fixed('bn_momentum', value=0.95)
@@ -95,7 +89,18 @@ class SimpNet(HyperModel):
 
     def optimizer_net_compile(self, hp):
         c = self.config
+
+        #         base_lr = hp.Float('base_lr', 0.1, 0.5, sampling='log', default=0.2)
+        #         decay_steps = hp.Int('decay_steps', 2500, 10000, sampling='linear', default=7185)
+        #         decay_rate = hp.Float('decay_rate', 0.1, 0.95, sampling='linear', default=0.1)
         lr_momentum = hp.Float('lr_momentum', 0.9, 0.99, sampling='log', default=0.95)
+
+        #         lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+        #             base_lr,
+        #             decay_steps,
+        #             decay_rate,
+        #             staircase=True,
+        #         )
 
         # default 0.30% misclassified
         boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
@@ -106,12 +111,10 @@ class SimpNet(HyperModel):
             values,
         )
         opt = keras.optimizers.Adadelta(learning_rate=lr_schedule, rho=lr_momentum, epsilon=c.EPSILON)
+        # opt = keras.optimizers.SGD(learning_rate=lr_schedule, momentum=lr_momentum)
+        # opt = keras.optimizers.Adadelta()
 
-        self.net.compile(
-            optimizer=opt,
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
-        )
+        self.net.compile(optimizer=opt, loss='categorical_crossentropy', metrics='accuracy')
 
     @staticmethod
     def get_callbacks():
@@ -180,92 +183,34 @@ class SimpNet(HyperModel):
         self.net.add(Dropout(rate=dropout_rate))
 
 
-# def error_rate(model_path, x_test, labels_test):
-#     net = load_model(model_path)
-#     outputs = net.predict(x_test)
-#     labels_predicted = np.argmax(outputs, axis=1)
-#     misclassified = sum(labels_predicted != labels_test)
-#     print('pct misclassified = ', 100 * misclassified / labels_test.size)
-
-
-# from https://stackoverflow.com/questions/47731935/using-multiple-validation-sets-with-keras
-class AdditionalValidationSets(tf.keras.callbacks.Callback):
-    def __init__(self, validation_sets, verbose=0, batch_size=None):
-        """
-        :param validation_sets:
-        a list of 3-tuples (validation_data, validation_targets, validation_set_name)
-        or 4-tuples (validation_data, validation_targets, sample_weights, validation_set_name)
-        :param verbose:
-        verbosity mode, 1 or 0
-        :param batch_size:
-        batch size to be used when evaluating on the additional datasets
-        """
-        super(AdditionalValidationSets, self).__init__()
-        self.validation_sets = validation_sets
-        for validation_set in self.validation_sets:
-            if len(validation_set) not in [3, 4]:
-                raise ValueError()
-        self.epoch = []
-        self.history = {}
-        self.verbose = verbose
-        self.batch_size = batch_size
-
-    def on_train_begin(self, logs=None):
-        self.epoch = []
-        self.history = {}
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        self.epoch.append(epoch)
-
-        # record the same values as History() as well
-        for k, v in logs.items():
-            self.history.setdefault(k, []).append(v)
-
-        # evaluate on the additional validation sets
-        for validation_set in self.validation_sets:
-            if len(validation_set) == 3:
-                validation_data, validation_targets, validation_set_name = validation_set
-                sample_weights = None
-            elif len(validation_set) == 4:
-                validation_data, validation_targets, sample_weights, validation_set_name = validation_set
-            else:
-                raise ValueError()
-
-            results = self.model.evaluate(
-                x=validation_data,
-                y=validation_targets,
-                verbose=self.verbose,
-                sample_weight=sample_weights,
-                batch_size=self.batch_size,
-            )
-
-            for metric, result in zip(self.model.metrics_names, results):
-                valuename = validation_set_name + '_' + metric
-                self.history.setdefault(valuename, []).append(result)
+def error_rate(model_path, x_test, labels_test):
+    net = load_model(model_path)
+    outputs = net.predict(x_test)
+    labels_predicted = np.argmax(outputs, axis=1)
+    misclassified = sum(labels_predicted != labels_test)
+    print('pct misclassified = ', 100 * misclassified / labels_test.size)
 
 
 if __name__ == "__main__":
+    x_train, y_train, labels_train, x_test, y_test, labels_test = GetData().get_all()
 
-    e_train, e_test, ori_train, ori_test = GetData().get_all()
-
-    # # data augmentation
-    # dataflow = get_dataflow(
-    #     x_train,
-    #     y_train,
-    #     batch_size=100,
-    #     rotation_range=20,
-    #     width_shift_range=0.0,
-    #     height_shift_range=0.0,
-    #     shear_range=10,
-    #     use_eraser=False,
-    #     p=0.5,
-    #     s_l=0.10,
-    #     s_h=0.10,
-    #     v_l=0,
-    #     v_h=0,
-    #     pixel_level=True,
-    # )
+    # data augmentation
+    dataflow = get_dataflow(
+        x_train,
+        y_train,
+        batch_size=100,
+        rotation_range=20,
+        width_shift_range=0.0,
+        height_shift_range=0.0,
+        shear_range=10,
+        use_eraser=False,
+        p=0.5,
+        s_l=0.10,
+        s_h=0.10,
+        v_l=0,
+        v_h=0,
+        pixel_level=True,
+    )
 
     simpnet = SimpNet(config=Slim())
     # simpnet = SimpNet(config=Full())
@@ -281,21 +226,21 @@ if __name__ == "__main__":
         )
 
         tuner.search(
-            e_train,
+            dataflow,
             epochs=20,
-            validation_data=e_test,
+            validation_data=(x_test, y_test),
             callbacks=SimpNet.get_callbacks(),
         )
 
-        best_hps = tuner.get_best_hyperparameters(num_trials=1)
+        best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
         # Build the model with the optimal hyperparameters and train it on the data for 50 epochs
         model = tuner.hypermodel.build(best_hps)
 
         history = model.fit(
-            e_train,
+            dataflow,
             epochs=50,
-            validation_data=e_test,
+            validation_data=(x_test, y_test),
             callbacks=SimpNet.get_callbacks(),
             verbose=2,
         )
@@ -332,15 +277,33 @@ if __name__ == "__main__":
 
         model = simpnet.build(hp)
 
-        callbacks = SimpNet.get_callbacks() + [AdditionalValidationSets([(*ori_test, 'mnist')])]
-
         history = model.fit(
-            e_train,
-            epochs=20,
-            validation_data=e_test,
-            callbacks=callbacks,
+            dataflow,
+            epochs=50,
+            validation_data=(x_test, y_test),
+            callbacks=SimpNet.get_callbacks(),
             verbose=2,
         )
+    # elif mode == 'final':
+    #     x = np.concatenate((x_train, x_test))
+    #     y = np.concatenate((y_train, y_test))
+
+    #     hp = HyperParameters()
+    #     hp.Fixed('weight_init', value='GlorotUniform')
+    #     hp.Fixed('base_lr', value=0.21145)
+    #     hp.Fixed('decay_steps', value=7185)
+    #     hp.Fixed('decay_rate', value=0.115)
+    #     hp.Fixed('lr_momentum', value=0.91074)
+    #     model = simpnet.build(hp)
+
+    #     history = model.fit(
+    #         x,
+    #         y,
+    #         epochs=50,
+    #         batch_size=100,
+    #         callbacks=SimpNet.get_callbacks(),
+    #         verbose=2,
+    #     )
     else:
         raise Exception('unrecognised training mode!')
 

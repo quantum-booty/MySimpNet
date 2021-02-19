@@ -1,6 +1,5 @@
 import tensorflow.compat.v2 as tf
 import tensorflow_datasets as tfds
-
 # from keras.datasets import mnist
 from keras.utils import to_categorical
 import matplotlib.pyplot as plt
@@ -60,65 +59,68 @@ def get_random_eraser(p=0.5, s_l=0.02, s_h=0.4, r_1=0.3, r_2=1 / 0.3, v_l=0, v_h
 class GetData:
     def __init__(self):
         self.data_import()
-        # self.preprocess()
+        self.preprocess()
 
     def get_all(self):
         return (
-            self.e_train,
-            self.e_test,
-            self.ori_train,
-            self.ori_test,
+            self.x_train,
+            self.y_train,
+            self.labels_train,
+            self.x_test,
+            self.y_test,
+            self.labels_test,
         )
 
     def data_import(self):
         # import from mnist and emnist and concatenate the two datasets
         # (x_train, labels_train), (x_test, labels_test) = mnist.load_data()
 
-        def transpose(image, label):
-            # return ds.map(lambda x: {'image': tf.transpose(x['image'], perm=[1, 0, 2]), 'label': x['label']})
-            return tf.transpose(image, perm=[1, 0, 2]), label
-
-        def normalize_img(image, label):
-            return tf.cast(image, tf.float32) / 255.0, label
+        def transpose(ds):
+            return ds.map(lambda x: {'image': tf.transpose(x['image'], perm=[1, 0, 2]), 'label': x['label']})
 
         # Construct a tf.data.Dataset
         # e_train, e_test = tfds.load('emnist/digits', split=['train', 'test'], shuffle_files=True)
         # ori_train, ori_test = tfds.load('emnist/mnist', split=['train', 'test'], shuffle_files=True)
-        (e_train, e_test), e_info = tfds.load(
-            'emnist/digits',
-            split=['train[:10]', 'test[:10]'],
-            shuffle_files=True,
-            as_supervised=True,
-            with_info=True,
-        )
-        (ori_train, ori_test), ori_info = tfds.load(
-            'emnist/mnist',
-            split=['train[:10]', 'test[:10]'],
-            shuffle_files=True,
-            as_supervised=True,
-            with_info=True,
-        )
+        e_train, e_test = tfds.load('emnist/digits', split=['train[:10]', 'test[:10]'], shuffle_files=True)
+        ori_train, ori_test = tfds.load('emnist/mnist', split=['train[:10]', 'test[:10]'], shuffle_files=True)
+        e_train, e_test = transpose(e_train), transpose(e_test)
+        ori_train, ori_test = transpose(ori_train), transpose(ori_test)
 
-        e_train = e_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_train = e_train.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_train = e_train.cache()  # cache before batch
-        e_train = e_train.shuffle(e_info.splits['train'].num_examples)
-        e_train = e_train.batch(128)
-        e_train = e_train.prefetch(tf.data.experimental.AUTOTUNE)
+        ds_train = e_train.concatenate(ori_train)
+        ds_test = e_test.concatenate(ori_test)
 
-        e_test = e_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_test = e_test.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_test = e_test.batch(128)
-        e_test = e_test.cache()  # cache after batch
-        e_test = e_test.prefetch(tf.data.experimental.AUTOTUNE)
+        x_train = []
+        labels_train = []
+        for _, xy_dict in ds_train.enumerate():
+            x_train.append(xy_dict['image'])
+            labels_train.append(xy_dict['label'])
 
-        ori_train = ori_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        ori_test = ori_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        x_test = []
+        labels_test = []
+        for _, xy_dict in ds_test.enumerate():
+            x_test.append(xy_dict['image'])
+            labels_test.append(xy_dict['label'])
 
-        self.e_train = e_train
-        self.e_test = e_test
-        self.ori_train = ori_train
-        self.ori_test = ori_test
+        self.x_train = np.array(x_train)
+        self.x_test = np.array(x_test)
+        self.labels_train = np.array(labels_train)
+        self.labels_test = np.array(labels_test)
+
+    def preprocess(self):
+        # one hot encoding
+        self.y_train = to_categorical(self.labels_train, 10)
+        self.y_test = to_categorical(self.labels_test, 10)
+
+        # convert to float type
+        x_train = self.x_train.astype('float32')
+        x_test = self.x_test.astype('float32')
+        x_train /= 255
+        x_test /= 255
+
+        n_pixels = x_train.shape[1]
+
+        self.x_train = x_train.reshape(x_train.shape[0], n_pixels, n_pixels, 1)
+        self.x_test = x_test.reshape(x_test.shape[0], n_pixels, n_pixels, 1)
 
 
 def plot(x_train):
