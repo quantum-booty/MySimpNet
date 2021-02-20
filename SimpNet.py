@@ -56,19 +56,19 @@ class SimpNet(HyperModel):
         # f4 = hp.Choice('filters4', values=[66, 68, 70, 72, 74], default=70)
         # f5 = hp.Choice('filters5', values=[86, 88, 90, 82, 94], default=90)
 
-        f0 = hp.Fixed('filters0', value=30)
-        f1 = hp.Fixed('filters1', value=40)
-        f2 = hp.Fixed('filters2', value=50)
-        f3 = hp.Fixed('filters3', value=58)
-        f4 = hp.Fixed('filters4', value=70)
-        f5 = hp.Fixed('filters5', value=90)
+        # f0 = hp.Fixed('filters0', value=30)
+        # f1 = hp.Fixed('filters1', value=40)
+        # f2 = hp.Fixed('filters2', value=50)
+        # f3 = hp.Fixed('filters3', value=58)
+        # f4 = hp.Fixed('filters4', value=70)
+        # f5 = hp.Fixed('filters5', value=90)
 
-        #         f0 = hp.Fixed('filters0', value=66)
-        #         f1 = hp.Fixed('filters1', value=64)
-        #         f2 = hp.Fixed('filters2', value=96)
-        #         f3 = hp.Fixed('filters3', value=144)
-        #         f4 = hp.Fixed('filters4', value=178)
-        #         f5 = hp.Fixed('filters5', value=216)
+        f0 = hp.Fixed('filters0', value=66)
+        f1 = hp.Fixed('filters1', value=64)
+        f2 = hp.Fixed('filters2', value=96)
+        f3 = hp.Fixed('filters3', value=144)
+        f4 = hp.Fixed('filters4', value=178)
+        f5 = hp.Fixed('filters5', value=216)
 
         self.conv_relu_bn_dropout(
             filters=f0, input_shape=c.INPUT_SHAPE, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo
@@ -98,15 +98,18 @@ class SimpNet(HyperModel):
         lr_momentum = hp.Float('lr_momentum', 0.9, 0.99, sampling='log', default=0.95)
 
         # default 0.30% misclassified
-        boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
+        # boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
+        boundaries = [5000, 17000, 29000, 32600, 37000, 42000]
         # values = [5e-1, 7e-2, 7e-3, 5e-4, 5e-5, 5e-6, 5e-7]
-        values = [9e-1, 9e-2, 9e-3, 9e-4, 9e-5, 9e-6, 9e-7]
+        # values = [9e-1, 9e-2, 9e-3, 9e-4, 9e-5, 9e-6, 9e-7]
+        values = [1e-0, 9e-1, 9e-2, 9e-3, 9e-4, 9e-5, 9e-6]
 
         lr_schedule = keras.optimizers.schedules.PiecewiseConstantDecay(
             boundaries,
             values,
         )
         opt = keras.optimizers.Adadelta(learning_rate=lr_schedule, rho=lr_momentum, epsilon=c.EPSILON)
+        # opt = keras.optimizers.Adadelta(learning_rate=1, rho=lr_momentum, epsilon=c.EPSILON)
 
         self.net.compile(
             optimizer=opt,
@@ -141,7 +144,7 @@ class SimpNet(HyperModel):
         dropout_rate=0.2,
         dropout=False,
         input_shape=None,
-        bn_before_relu=True,
+        bn_before_relu=False,
         weight_init='HeUniform',
     ):
         if input_shape is None:
@@ -191,7 +194,7 @@ class SimpNet(HyperModel):
 
 if __name__ == "__main__":
 
-    train, test = GetData().get_all()
+    train, test = GetData(batch_size=64).get_all()
 
     # # data augmentation
     # dataflow = get_dataflow(
@@ -211,8 +214,8 @@ if __name__ == "__main__":
     #     pixel_level=True,
     # )
 
-    simpnet = SimpNet(config=Slim())
-    # simpnet = SimpNet(config=Full())
+    # simpnet = SimpNet(config=Slim())
+    simpnet = SimpNet(config=Full())
 
     mode = 'test'
 
@@ -261,7 +264,7 @@ if __name__ == "__main__":
         # hp.Fixed('lr_momentum', value=0.93493)
 
         # manual tune 0.30% 0.32% misclassification
-        hp.Fixed('weight_init', value='GlorotUniform')
+        hp.Fixed('weight_init', value='HeUniform')
         hp.Fixed('base_lr', value=0.1)
         # hp.Fixed('decay_steps', value=2500)
         # hp.Fixed('decay_rate', value=0.1)
@@ -278,7 +281,7 @@ if __name__ == "__main__":
 
         history = model.fit(
             train,
-            epochs=20,
+            epochs=8,
             validation_data=test,
             callbacks=SimpNet.get_callbacks(),
             verbose=2,
