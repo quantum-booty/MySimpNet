@@ -73,13 +73,6 @@ class GetData:
         # import from mnist and emnist and concatenate the two datasets
         # (x_train, labels_train), (x_test, labels_test) = mnist.load_data()
 
-        def transpose(image, label):
-            # return ds.map(lambda x: {'image': tf.transpose(x['image'], perm=[1, 0, 2]), 'label': x['label']})
-            return tf.transpose(image, perm=[1, 0, 2]), label
-
-        def normalize_img(image, label):
-            return tf.cast(image, tf.float32) / 255.0, label
-
         # Construct a tf.data.Dataset
         # e_train, e_test = tfds.load('emnist/digits', split=['train', 'test'], shuffle_files=True)
         # ori_train, ori_test = tfds.load('emnist/mnist', split=['train', 'test'], shuffle_files=True)
@@ -108,37 +101,52 @@ class GetData:
         # print(emnist_digit_info)
         # print(emnist_mnist_info)
         # print(mnist_info)
+        emnist_digit_train_len = emnist_digit_info.splits['train'].num_examples
+        emnist_mnist_train_len = emnist_mnist_info.splits['train'].num_examples
+        mnist_train_len = mnist_info.splits['train'].num_examples
+        train_size = emnist_digit_train_len + emnist_mnist_train_len + mnist_train_len
 
-        emnist_train = emnist_digit_train.concatenate(emnist_mnist_train).concatenate(mnist_train)
-        emnist_test = emnist_digit_test.concatenate(emnist_mnist_test).concatenate(mnist_test)
+        emnist_train = emnist_digit_train.concatenate(emnist_mnist_train)
+        emnist_test = emnist_digit_test.concatenate(emnist_mnist_test)
 
-        def prepare_train(emnist_train, mnist_train):
-            # emnist needs to transposed
-            emnist_train = emnist_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-            emnist_train = emnist_train.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-            # mnist data has correct orientations
-            mnist_train = mnist_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-            data = emnist_train.concatenate(mnist_train)
-            data = data.cache()  # cache before batch
-            data = data.shuffle(emnist_digit_info.splits['train'].num_examples)
-            data = data.batch(self.batch_size)
-            data = data.prefetch(tf.data.experimental.AUTOTUNE)
-            return data
+        self.emnist_train = prepare_train(emnist_train, mnist_train, self.batch_size, train_size)
+        self.emnist_test = prepare_test(emnist_test, mnist_test, self.batch_size)
 
-        def prepare_test(emnist_test, mnist_test):
-            # emnist needs to transposed
-            emnist_test = emnist_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-            emnist_test = emnist_test.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-            # mnist data has correct orientations
-            mnist_test = mnist_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-            data = emnist_test.concatenate(mnist_test)
-            data = data.batch(self.batch_size)
-            data = data.cache()  # cache after batch
-            data = data.prefetch(tf.data.experimental.AUTOTUNE)
-            return data
 
-        self.emnist_train = prepare_train(emnist_train)
-        self.emnist_test = prepare_test(emnist_test)
+def transpose(image, label):
+    # return ds.map(lambda x: {'image': tf.transpose(x['image'], perm=[1, 0, 2]), 'label': x['label']})
+    return tf.transpose(image, perm=[1, 0, 2]), label
+
+
+def normalize_img(image, label):
+    return tf.cast(image, tf.float32) / 255.0, label
+
+
+def prepare_train(emnist_train, mnist_train, batch_size, train_size):
+    # emnist needs to transposed
+    emnist_train = emnist_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    emnist_train = emnist_train.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    # mnist data has correct orientations
+    mnist_train = mnist_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    data = emnist_train.concatenate(mnist_train)
+    data = data.cache()  # cache before batch
+    data = data.shuffle(train_size)
+    data = data.batch(batch_size)
+    data = data.prefetch(tf.data.experimental.AUTOTUNE)
+    return data
+
+
+def prepare_test(emnist_test, mnist_test, batch_size):
+    # emnist needs to transposed
+    emnist_test = emnist_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    emnist_test = emnist_test.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    # mnist data has correct orientations
+    mnist_test = mnist_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    data = emnist_test.concatenate(mnist_test)
+    data = data.batch(batch_size)
+    data = data.cache()  # cache after batch
+    data = data.prefetch(tf.data.experimental.AUTOTUNE)
+    return data
 
 
 def plot(x_train):
