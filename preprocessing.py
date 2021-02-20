@@ -64,10 +64,8 @@ class GetData:
 
     def get_all(self):
         return (
-            self.e_train,
-            self.e_test,
-            self.ori_train,
-            self.ori_test,
+            self.emnist_train,
+            self.emnist_test,
         )
 
     def data_import(self):
@@ -84,41 +82,52 @@ class GetData:
         # Construct a tf.data.Dataset
         # e_train, e_test = tfds.load('emnist/digits', split=['train', 'test'], shuffle_files=True)
         # ori_train, ori_test = tfds.load('emnist/mnist', split=['train', 'test'], shuffle_files=True)
-        (e_train, e_test), e_info = tfds.load(
+        (emnist_digit_train, emnist_digit_test), emnist_digit_info = tfds.load(
             'emnist/digits',
-            split=['train[:10]', 'test[:10]'],
+            split=['train', 'test'],
             shuffle_files=True,
             as_supervised=True,
             with_info=True,
         )
-        (ori_train, ori_test), ori_info = tfds.load(
+        (emnist_mnist_train, emnist_mnist_test), emnist_mnist_info = tfds.load(
             'emnist/mnist',
-            split=['train[:10]', 'test[:10]'],
+            split=['train', 'test'],
             shuffle_files=True,
             as_supervised=True,
             with_info=True,
         )
+        (mnist_train, mnist_test), mnist_info = tfds.load(
+            'mnist',
+            split=['train', 'test'],
+            shuffle_files=True,
+            as_supervised=True,
+            with_info=True,
+        )
+        print(emnist_digit_info)
+        print(emnist_mnist_info)
+        print(mnist_info)
 
-        e_train = e_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_train = e_train.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_train = e_train.cache()  # cache before batch
-        e_train = e_train.shuffle(e_info.splits['train'].num_examples)
-        e_train = e_train.batch(128)
-        e_train = e_train.prefetch(tf.data.experimental.AUTOTUNE)
+        emnist_train = emnist_digit_train.concatenate(emnist_mnist_train).concatenate(mnist_train)
+        emnist_test = emnist_digit_test.concatenate(emnist_mnist_test).concatenate(mnist_test)
 
-        e_test = e_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_test = e_test.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        e_test = e_test.batch(128)
-        e_test = e_test.cache()  # cache after batch
-        e_test = e_test.prefetch(tf.data.experimental.AUTOTUNE)
+        def prepare_train(data):
+            data = data.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            data = data.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            data = data.cache()  # cache before batch
+            data = data.shuffle(emnist_digit_info.splits['train'].num_examples)
+            data = data.batch(128)
+            data = data.prefetch(tf.data.experimental.AUTOTUNE)
+            return data
 
-        ori_train = ori_train.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        ori_test = ori_test.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        def prepare_test(data):
+            data = data.map(normalize_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            data = data.map(transpose, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            data = data.batch(128)
+            data = data.cache()  # cache after batch
+            data = data.prefetch(tf.data.experimental.AUTOTUNE)
 
-        self.e_train = e_train
-        self.e_test = e_test
-        self.ori_train = ori_train
-        self.ori_test = ori_test
+        self.emnist_train = prepare_train(emnist_train)
+        self.emnist_test = prepare_test(emnist_test)
 
 
 def plot(x_train):
@@ -168,6 +177,8 @@ def get_dataflow(
 
 
 if __name__ == "__main__":
+    GetData()
+
     # x_train, x_test, labels_train, y_train, y_test, labels_test = preprocess()
 
     # eraser = get_random_eraser(

@@ -99,7 +99,8 @@ class SimpNet(HyperModel):
 
         # default 0.30% misclassified
         boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
-        values = [5e-1, 7e-2, 7e-3, 5e-4, 5e-5, 5e-6, 5e-7]
+        # values = [5e-1, 7e-2, 7e-3, 5e-4, 5e-5, 5e-6, 5e-7]
+        values = [9e-1, 9e-2, 9e-3, 9e-4, 9e-5, 9e-6, 9e-7]
 
         lr_schedule = keras.optimizers.schedules.PiecewiseConstantDecay(
             boundaries,
@@ -118,14 +119,14 @@ class SimpNet(HyperModel):
         checkpoint_filepath = 'checkpoint/'
         model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_filepath,
-            monitor='val_accuracy',
+            monitor='val_sparse_categorical_accuracy',
             save_best_only=True,
         )
 
         log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=6)
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_sparse_categorical_accuracy', patience=6)
 
         callbacks = [model_checkpoint_callback, tensorboard_callback, early_stopping]
 
@@ -188,66 +189,9 @@ class SimpNet(HyperModel):
 #     print('pct misclassified = ', 100 * misclassified / labels_test.size)
 
 
-# from https://stackoverflow.com/questions/47731935/using-multiple-validation-sets-with-keras
-class AdditionalValidationSets(tf.keras.callbacks.Callback):
-    def __init__(self, validation_sets, verbose=0, batch_size=None):
-        """
-        :param validation_sets:
-        a list of 3-tuples (validation_data, validation_targets, validation_set_name)
-        or 4-tuples (validation_data, validation_targets, sample_weights, validation_set_name)
-        :param verbose:
-        verbosity mode, 1 or 0
-        :param batch_size:
-        batch size to be used when evaluating on the additional datasets
-        """
-        super(AdditionalValidationSets, self).__init__()
-        self.validation_sets = validation_sets
-        for validation_set in self.validation_sets:
-            if len(validation_set) not in [3, 4]:
-                raise ValueError()
-        self.epoch = []
-        self.history = {}
-        self.verbose = verbose
-        self.batch_size = batch_size
-
-    def on_train_begin(self, logs=None):
-        self.epoch = []
-        self.history = {}
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        self.epoch.append(epoch)
-
-        # record the same values as History() as well
-        for k, v in logs.items():
-            self.history.setdefault(k, []).append(v)
-
-        # evaluate on the additional validation sets
-        for validation_set in self.validation_sets:
-            if len(validation_set) == 3:
-                validation_data, validation_targets, validation_set_name = validation_set
-                sample_weights = None
-            elif len(validation_set) == 4:
-                validation_data, validation_targets, sample_weights, validation_set_name = validation_set
-            else:
-                raise ValueError()
-
-            results = self.model.evaluate(
-                x=validation_data,
-                y=validation_targets,
-                verbose=self.verbose,
-                sample_weight=sample_weights,
-                batch_size=self.batch_size,
-            )
-
-            for metric, result in zip(self.model.metrics_names, results):
-                valuename = validation_set_name + '_' + metric
-                self.history.setdefault(valuename, []).append(result)
-
-
 if __name__ == "__main__":
 
-    e_train, e_test, ori_train, ori_test = GetData().get_all()
+    train, test = GetData().get_all()
 
     # # data augmentation
     # dataflow = get_dataflow(
@@ -275,15 +219,15 @@ if __name__ == "__main__":
     if mode == 'tune':
         tuner = Hyperband(
             simpnet,
-            objective='val_accuracy',
+            objective='val_sparse_categorical_accuracy',
             max_epochs=15,
             hyperband_iterations=1,
         )
 
         tuner.search(
-            e_train,
+            train,
             epochs=20,
-            validation_data=e_test,
+            validation_data=test,
             callbacks=SimpNet.get_callbacks(),
         )
 
@@ -293,9 +237,9 @@ if __name__ == "__main__":
         model = tuner.hypermodel.build(best_hps)
 
         history = model.fit(
-            e_train,
+            train,
             epochs=50,
-            validation_data=e_test,
+            validation_data=test,
             callbacks=SimpNet.get_callbacks(),
             verbose=2,
         )
@@ -332,20 +276,18 @@ if __name__ == "__main__":
 
         model = simpnet.build(hp)
 
-        callbacks = SimpNet.get_callbacks() + [AdditionalValidationSets([(*ori_test, 'mnist')])]
-
         history = model.fit(
-            e_train,
+            train,
             epochs=20,
-            validation_data=e_test,
-            callbacks=callbacks,
+            validation_data=test,
+            callbacks=SimpNet.get_callbacks(),
             verbose=2,
         )
     else:
         raise Exception('unrecognised training mode!')
 
-    model.save('SimpNet_best.h5')
+    model = load_model('checkpoint')
 
-    val_acc_per_epoch = history.history['val_accuracy']
+    val_acc_per_epoch = history.history['val_sparse_categorical_accuracy']
     best_epoch = val_acc_per_epoch.index(max(val_acc_per_epoch)) + 1
     print('Best epoch: %d' % (best_epoch,))
