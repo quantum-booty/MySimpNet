@@ -10,15 +10,14 @@ import keras.layers as layers
 
 from cnn_configs import Slim, Full
 
-# %load_ext tensorboard
 import tensorflow as tf
+import numpy as np
 
 from kerastuner import HyperModel, HyperParameters
 from kerastuner.tuners import Hyperband
 import datetime
-import numpy as np
 
-from preprocessing import GetData, get_dataflow
+from preprocessing import GetData
 
 
 # import matplotlib.pyplot as plt
@@ -30,17 +29,24 @@ class SimpNet(HyperModel):
 
     def build(self, hp):
         self.net = Sequential()
+        self.data_augmentation()
         self.inference(hp)
         self.optimizer_net_compile(hp)
         return self.net
 
+    def data_augmentation(self):
+        degree_rot = 0
+        # translation = 0.0
+        # layers.experimental.preprocessing.RandomTranslation(translation, translation),
+        data_augmentation = tf.keras.Sequential(
+            [
+                layers.experimental.preprocessing.RandomRotation(degree_rot / 360 * 2 * np.pi),
+            ],
+            name='data_augmentation',
+        )
+        self.net.add(data_augmentation)
+
     def inference(self, hp):
-        """
-        weight_init
-        dropout_rate
-        bn_momentum
-        lr_momentum
-        """
         c = self.config
         wi = hp.Choice('weight_init', values=['HeUniform', 'HeNormal', 'GlorotUniform', 'GlorotNormal'])
         dr = hp.Fixed('dropout_rate', value=0.2)
@@ -49,26 +55,12 @@ class SimpNet(HyperModel):
         else:
             bn_mo = hp.Fixed('bn_momentum', value=0.99)
 
-        # f0 = hp.Choice('filters0', values=[24, 28, 30, 34, 36], default=30)
-        # f1 = hp.Choice('filters1', values=[36, 38, 40, 42, 44], default=40)
-        # f2 = hp.Choice('filters2', values=[46, 48, 50, 52, 54], default=50)
-        # f3 = hp.Choice('filters3', values=[54, 56, 58, 60, 62], default=58)
-        # f4 = hp.Choice('filters4', values=[66, 68, 70, 72, 74], default=70)
-        # f5 = hp.Choice('filters5', values=[86, 88, 90, 82, 94], default=90)
-
-        # f0 = hp.Fixed('filters0', value=30)
-        # f1 = hp.Fixed('filters1', value=40)
-        # f2 = hp.Fixed('filters2', value=50)
-        # f3 = hp.Fixed('filters3', value=58)
-        # f4 = hp.Fixed('filters4', value=70)
-        # f5 = hp.Fixed('filters5', value=90)
-
-        f0 = hp.Fixed('filters0', value=66)
-        f1 = hp.Fixed('filters1', value=64)
-        f2 = hp.Fixed('filters2', value=96)
-        f3 = hp.Fixed('filters3', value=144)
-        f4 = hp.Fixed('filters4', value=178)
-        f5 = hp.Fixed('filters5', value=216)
+        f0 = hp.Fixed('filters0', value=30)
+        f1 = hp.Fixed('filters1', value=40)
+        f2 = hp.Fixed('filters2', value=50)
+        f3 = hp.Fixed('filters3', value=58)
+        f4 = hp.Fixed('filters4', value=70)
+        f5 = hp.Fixed('filters5', value=90)
 
         self.conv_relu_bn_dropout(
             filters=f0, input_shape=c.INPUT_SHAPE, dropout=c.dropout, weight_init=wi, bn_momentum=bn_mo
@@ -98,18 +90,14 @@ class SimpNet(HyperModel):
         lr_momentum = hp.Float('lr_momentum', 0.9, 0.99, sampling='log', default=0.95)
 
         # default 0.30% misclassified
-        # boundaries = [5000, 9500, 22000, 29600, 32000, 37000]
-        boundaries = [5000, 17000, 29000, 32600, 37000, 42000]
-        # values = [5e-1, 7e-2, 7e-3, 5e-4, 5e-5, 5e-6, 5e-7]
-        # values = [9e-1, 9e-2, 9e-3, 9e-4, 9e-5, 9e-6, 9e-7]
-        values = [1e-0, 9e-1, 9e-2, 9e-3, 9e-4, 9e-5, 9e-6]
+        boundaries = [5000, 14000, 20000, 30000, 37000, 42000]
+        values = [5e-1, 7e-2, 7e-3, 5e-4, 5e-5, 5e-6, 5e-7]
 
         lr_schedule = keras.optimizers.schedules.PiecewiseConstantDecay(
             boundaries,
             values,
         )
         opt = keras.optimizers.Adadelta(learning_rate=lr_schedule, rho=lr_momentum, epsilon=c.EPSILON)
-        # opt = keras.optimizers.Adadelta(learning_rate=1, rho=lr_momentum, epsilon=c.EPSILON)
 
         self.net.compile(
             optimizer=opt,
@@ -184,12 +172,22 @@ class SimpNet(HyperModel):
         self.net.add(Dropout(rate=dropout_rate))
 
 
-# def error_rate(model_path, x_test, labels_test):
-#     net = load_model(model_path)
-#     outputs = net.predict(x_test)
-#     labels_predicted = np.argmax(outputs, axis=1)
-#     misclassified = sum(labels_predicted != labels_test)
-#     print('pct misclassified = ', 100 * misclassified / labels_test.size)
+def error_rate(model_path, x_test, labels_test):
+    net = load_model(model_path)
+    outputs = net.predict(x_test)
+    labels_predicted = np.argmax(outputs, axis=1)
+    error_rate_ = (labels_predicted != labels_test).mean() * 100
+    print('pct misclassified = ', error_rate_)
+
+
+def error_rate1(model_path, data):
+    net = load_model(model_path)
+    outputs = net.predict(data)
+    labels_predicted = np.argmax(outputs, axis=1)
+    images, labels = tuple(zip(*data))
+    labels = np.concatenate([*labels])
+    error_rate_ = (labels_predicted != labels).mean() * 100
+    print('pct misclassified = ', error_rate_)
 
 
 if __name__ == "__main__":
@@ -214,8 +212,8 @@ if __name__ == "__main__":
     #     pixel_level=True,
     # )
 
-    # simpnet = SimpNet(config=Slim())
-    simpnet = SimpNet(config=Full())
+    simpnet = SimpNet(config=Slim())
+    # simpnet = SimpNet(config=Full())
 
     mode = 'test'
 
@@ -276,6 +274,13 @@ if __name__ == "__main__":
         f3 = hp.Fixed('filters3', value=58)
         f4 = hp.Fixed('filters4', value=70)
         f5 = hp.Fixed('filters5', value=90)
+
+        # f0 = hp.Fixed('filters0', value=66)
+        # f1 = hp.Fixed('filters1', value=64)
+        # f2 = hp.Fixed('filters2', value=96)
+        # f3 = hp.Fixed('filters3', value=144)
+        # f4 = hp.Fixed('filters4', value=178)
+        # f5 = hp.Fixed('filters5', value=216)
 
         model = simpnet.build(hp)
 

@@ -8,6 +8,8 @@ class Slim(NamedTuple):
 
     EPSILON: float = 1e-6
     BN_MOMENTUM: float = 0.99
+    DROPOUT_RATE: float = 0.2
+    WEIGHT_INIT: str = 'HeUniform'
 
     INPUT_SHAPE: tuple = (28, 28, 1)
 
@@ -64,6 +66,7 @@ class Full(NamedTuple):
 
     EPSILON: float = 1e-6
     BN_MOMENTUM: float = 0.95
+    DROPOUT_RATE: float = 0.2
 
     INPUT_SHAPE: tuple = (28, 28, 1)
 
